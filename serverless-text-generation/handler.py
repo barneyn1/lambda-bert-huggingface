@@ -1,50 +1,71 @@
+import argparse
 import json
 import torch
-from transformers import AutoModelForCausalLM, AutoTokenizer, AutoConfig
+from transformers import AutoModelForCausalLM, AutoTokenizer
 
 
-def encode(tokenizer, prompt):
-    """encodes the question and context with a given tokenizer
-    that is understandable to the model"""
-    input_ids = tokenizer(prompt, return_tensors="pt").input_ids
-    return input_ids
+def encode(tokenizer, prompt: str):
+    """Encode prompt into input IDs."""
+    return tokenizer(prompt, return_tensors="pt").input_ids
 
 
-def decode(tokenizer, token):
-    """decodes the tokens to the answer with a given tokenizer
-    to return human readable response in a string format"""
-    answer_tokens = tokenizer.batch_decode(token, skip_special_tokens=True)
-    return answer_tokens[0]
+def decode(tokenizer, token_ids):
+    """Decode generated token IDs back to text."""
+    outputs = tokenizer.batch_decode(token_ids, skip_special_tokens=True)
+    return outputs[0].strip()
 
 
 def serverless_pipeline(model_path="./model"):
-    """Initializes the model and tokenzier and returns a predict function that ca be used as pipeline"""
+    """Load model/tokenizer once and return a reusable predict function."""
     tokenizer = AutoTokenizer.from_pretrained(model_path)
     model = AutoModelForCausalLM.from_pretrained(model_path)
+    model.eval()
 
-    def predict(prompt, max_length=60):
-        """predicts the answer on an given question and context.
-        Uses encode and decode method from above"""
+    def predict(prompt: str, max_length: int = 60) -> str:
+        if not prompt or not prompt.strip():
+            raise ValueError("The 'prompt' field is required.")
+
         input_ids = encode(tokenizer, prompt)
-        ans_tokens = model.generate(input_ids, do_sample=False, max_length=max_length)
-        answer = decode(tokenizer, ans_tokens)
-        return answer
+
+        with torch.no_grad():
+            output_ids = model.generate(
+                input_ids,
+                do_sample=False,
+                max_length=max_length,
+            )
+
+        return decode(tokenizer, output_ids)
 
     return predict
 
 
-# initializes the pipeline
+# Load once at import time
 text_generating_pipeline = serverless_pipeline()
 
 
+def predict_text(prompt: str, max_length: int = 60) -> dict:
+    """Direct Python entrypoint for local/CLI use."""
+    answer = text_generating_pipeline(prompt=prompt, max_length=max_length)
+    return {"answer": answer}
+
+
 def handler(event, context):
+    """AWS Lambda entrypoint."""
     try:
-        # loads the incoming event into a dictonary
-        body = json.loads(event["body"])
-        # uses the pipeline to predict the answer
-        answer = text_generating_pipeline(
-            prompt=body["prompt"], max_length=body["max_length"]
-        )
+        raw_body = event.get("body", "{}")
+
+        if isinstance(raw_body, str):
+            body = json.loads(raw_body)
+        elif isinstance(raw_body, dict):
+            body = raw_body
+        else:
+            raise ValueError("event['body'] must be a JSON string or dict")
+
+        prompt = body.get("prompt", "")
+        max_length = int(body.get("max_length", 60))
+
+        result = predict_text(prompt=prompt, max_length=max_length)
+
         return {
             "statusCode": 200,
             "headers": {
@@ -52,8 +73,9 @@ def handler(event, context):
                 "Access-Control-Allow-Origin": "*",
                 "Access-Control-Allow-Credentials": True,
             },
-            "body": json.dumps({"answer": answer}),
+            "body": json.dumps(result),
         }
+
     except Exception as e:
         print(repr(e))
         return {
@@ -65,3 +87,15 @@ def handler(event, context):
             },
             "body": json.dumps({"error": repr(e)}),
         }
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--prompt", required=True)
+    parser.add_argument("--max_length", type=int, default=60)
+    args = parser.parse_args()
+
+    print(json.dumps(
+        predict_text(prompt=args.prompt, max_length=args.max_length),
+        indent=2
+    ))
