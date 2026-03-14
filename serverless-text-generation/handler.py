@@ -3,6 +3,10 @@ import json
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
+#Local Testing:
+#cd serverless-text-generation
+#python get_model.py
+#python handler.py --prompt "Machine learning is" --max_length 50
 
 def encode(tokenizer, prompt: str):
     """Encode prompt into input IDs."""
