@@ -1,26 +1,25 @@
+from pathlib import Path
+
 from transformers import AutoModelForQuestionAnswering, AutoTokenizer
 
 
-def get_model(model):
-    """Loads model from Hugginface model hub into
-    the ./model directory"""
-    try:
-        model = AutoModelForQuestionAnswering.from_pretrained(model, use_cdn=True)
-        model.save_pretrained("./model")
-    except Exception as e:
-        raise (e)
+MODEL_DIR = Path(__file__).resolve().parents[1] / "model"
+MODEL_DIR.mkdir(parents=True, exist_ok=True)
 
 
-def get_tokenizer(tokenizer):
-    """Loads tokenizer from Hugginface model hubinto
-    the ./model directory"""
-    try:
-        tokenizer = AutoTokenizer.from_pretrained(tokenizer)
-        tokenizer.save_pretrained("./model")
-    except Exception as e:
-        raise (e)
+def get_model(model_name: str):
+    """Load a QA model from Hugging Face and save it into the repo-root model/ directory."""
+    model = AutoModelForQuestionAnswering.from_pretrained(model_name, use_cdn=True)
+    model.save_pretrained(MODEL_DIR)
+
+
+def get_tokenizer(tokenizer_name: str):
+    """Load a tokenizer from Hugging Face and save it into the repo-root model/ directory."""
+    tokenizer = AutoTokenizer.from_pretrained(tokenizer_name)
+    tokenizer.save_pretrained(MODEL_DIR)
 
 
 if __name__ == "__main__":
-    get_model("mrm8488/mobilebert-uncased-finetuned-squadv2")
-    get_tokenizer("mrm8488/mobilebert-uncased-finetuned-squadv2")
+    MODEL_ID = "mrm8488/mobilebert-uncased-finetuned-squadv2"
+    get_model(MODEL_ID)
+    get_tokenizer(MODEL_ID)
