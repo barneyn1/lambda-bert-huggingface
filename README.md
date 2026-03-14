@@ -1,4 +1,4 @@
-Lambda-Bert-Huggingface: Stripped JS Frontend and CLI Alterations for Debloat & Deployment
+#Lambda-Bert-Huggingface: Stripped JS Frontend and CLI Alterations for Debloat & Deployment
 
 QA Function:
 ```bash
